@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Threads AutoPoster</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --surface2: #222;
+      --border: #333;
+      --text: #e8e8e8;
+      --text2: #999;
+      --accent: #7c3aed;
+      --accent2: #9d5cf5;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --blue: #3b82f6;
+    }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
+
+    /* Layout */
+    .layout { display: flex; height: 100vh; }
+    .sidebar { width: 220px; min-width: 220px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+    .main { flex: 1; overflow-y: auto; }
+
+    /* Sidebar */
+    .sidebar-header { padding: 20px 16px 12px; border-bottom: 1px solid var(--border); }
+    .sidebar-header h1 { font-size: 15px; font-weight: 700; color: var(--accent2); }
+    .sidebar-header p { font-size: 11px; color: var(--text2); margin-top: 2px; }
+    .nav { padding: 8px; flex: 1; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; cursor: pointer; color: var(--text2); font-size: 13px; transition: all .15s; }
+    .nav-item:hover { background: var(--surface2); color: var(--text); }
+    .nav-item.active { background: var(--accent); color: white; }
+    .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .nav-section { padding: 16px 12px 4px; font-size: 10px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
+
+    /* Status indicator */
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-left: auto; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* Page */
+    .page { display: none; padding: 24px; max-width: 1200px; }
+    .page.active { display: block; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .page-title { font-size: 20px; font-weight: 700; }
+    .page-sub { font-size: 13px; color: var(--text2); margin-top: 3px; }
+
+    /* Cards */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .card-sm { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+    /* Stat cards */
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; }
+    .stat-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; }
+    .stat-value { font-size: 28px; font-weight: 700; }
+    .stat-value.green { color: var(--green); }
+    .stat-value.yellow { color: var(--yellow); }
+    .stat-value.blue { color: var(--blue); }
+    .stat-value.purple { color: var(--accent2); }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all .15s; }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent2); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--border); }
+    .btn-green { background: #16a34a; color: white; }
+    .btn-green:hover { background: var(--green); }
+    .btn-red { background: #b91c1c; color: white; }
+    .btn-red:hover { background: var(--red); }
+    .btn-yellow { background: #a16207; color: white; }
+    .btn-yellow:hover { background: var(--yellow); }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .btn-xs { padding: 3px 8px; font-size: 11px; border-radius: 5px; }
+
+    /* Forms */
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 6px; }
+    .form-input, .form-select, .form-textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 9px 12px; color: var(--text); font-size: 13px; font-family: inherit;
+      transition: border-color .15s;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .form-textarea { resize: vertical; min-height: 100px; line-height: 1.5; }
+    .form-hint { font-size: 11px; color: var(--text2); margin-top: 4px; }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th { font-size: 11px; font-weight: 600; color: var(--text2); padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; text-transform: uppercase; letter-spacing: .4px; }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+
+    /* Status badges */
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+    .badge-green { background: #14532d; color: var(--green); }
+    .badge-yellow { background: #422006; color: var(--yellow); }
+    .badge-blue { background: #1e3a5f; color: var(--blue); }
+    .badge-red { background: #450a0a; color: var(--red); }
+    .badge-purple { background: #3b0764; color: var(--accent2); }
+    .badge-gray { background: var(--surface2); color: var(--text2); }
+
+    /* Post preview */
+    .post-content { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+    .post-comment { background: #111; border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; margin-top: 8px; }
+    .preview-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .preview-meta { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .preview-account { font-weight: 600; font-size: 14px; }
+    .preview-time { font-size: 12px; color: var(--text2); }
+    .preview-actions { display: flex; gap: 8px; margin-top: 14px; }
+
+    /* Modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px; width: 560px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-title { font-size: 16px; font-weight: 700; }
+    .modal-close { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 20px; line-height: 1; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; background: var(--surface2); padding: 4px; border-radius: 10px; margin-bottom: 20px; width: fit-content; }
+    .tab { padding: 7px 16px; border-radius: 7px; cursor: pointer; font-size: 13px; color: var(--text2); transition: all .15s; }
+    .tab.active { background: var(--surface); color: var(--text); font-weight: 500; }
+
+    /* Empty state */
+    .empty { text-align: center; padding: 48px 24px; color: var(--text2); }
+    .empty-icon { font-size: 36px; margin-bottom: 12px; }
+    .empty p { font-size: 14px; }
+
+    /* Notifications */
+    #toast { position: fixed; bottom: 24px; right: 24px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
+    .toast-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; font-size: 13px; min-width: 240px; animation: slideIn .2s ease; }
+    .toast-item.success { border-left: 3px solid var(--green); }
+    .toast-item.error { border-left: 3px solid var(--red); }
+    .toast-item.info { border-left: 3px solid var(--blue); }
+    @keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
+
+    /* Misc */
+    .divider { height: 1px; background: var(--border); margin: 16px 0; }
+    .flex { display: flex; }
+    .flex-center { display: flex; align-items: center; }
+    .flex-between { display: flex; justify-content: space-between; align-items: center; }
+    .gap-8 { gap: 8px; }
+    .gap-12 { gap: 12px; }
+    .mt-8 { margin-top: 8px; }
+    .mt-16 { margin-top: 16px; }
+    .mb-16 { margin-bottom: 16px; }
+    .text-sm { font-size: 12px; }
+    .text-muted { color: var(--text2); }
+    .section-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+    .checkbox-group { display: flex; gap: 8px; flex-wrap: wrap; }
+    .checkbox-day { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; font-size: 12px; font-weight: 500; color: var(--text2); transition: all .15s; }
+    .checkbox-day.selected { background: var(--accent); border-color: var(--accent); color: white; }
+    .time-tag { display: inline-flex; align-items: center; gap: 6px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; }
+    .time-tag button { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 14px; line-height: 1; }
+    .tag { display: inline-flex; align-items: center; gap: 6px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; font-size: 12px; }
+    .tag button { background: none; border: none; color: var(--text2); cursor: pointer; }
+    .loading { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent2); border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🧵</div>
+        <div>
+          <h1 style="font-size:14px;font-weight:700;color:white">Threads Manager</h1>
+          <p style="font-size:11px;color:var(--text2);margin-top:1px">자동화 도구</p>
+        </div>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" onclick="navigate('dashboard')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        대시보드
+        <span class="status-dot" id="scheduler-dot"></span>
+      </div>
+      <div class="nav-item" onclick="navigate('preview')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        미리보기
+        <span id="preview-badge" style="display:none;background:var(--red);color:white;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:auto;"></span>
+      </div>
+      <div class="nav-item" onclick="navigate('pending')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        발행대기
+        <span id="pending-badge" style="display:none;background:var(--accent);color:white;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:auto;"></span>
+      </div>
+      <div class="nav-item" onclick="navigate('history')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        포스트 기록
+      </div>
+      <div class="nav-item" onclick="navigate('scrapes')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        스크랩 데이터
+        <span id="scrapes-badge" style="display:none;background:var(--surface2);color:var(--text2);border-radius:10px;padding:1px 7px;font-size:10px;margin-left:auto;border:1px solid var(--border)"></span>
+      </div>
+
+      <div style="padding:8px 4px 4px">
+        <button class="btn btn-primary" style="width:100%;justify-content:center;gap:8px" onclick="openQuickAddModal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          포스팅 추가하기
+        </button>
+      </div>
+
+      <div class="nav-section">관리</div>
+      <div class="nav-item" onclick="navigate('projects')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        프로젝트
+        <span id="projects-badge" style="display:none;background:var(--surface2);color:var(--text2);border-radius:10px;padding:1px 7px;font-size:10px;margin-left:auto;border:1px solid var(--border)"></span>
+      </div>
+      <div class="nav-item" onclick="navigate('schedules')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        스케줄 관리
+      </div>
+    </nav>
+    <div style="padding:16px;border-top:1px solid var(--border)">
+      <div class="flex-center gap-8">
+        <div class="loading" id="global-loading" style="display:none"></div>
+        <span class="text-sm text-muted" id="global-status">준비</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main">
+    <!-- Dashboard -->
+    <div id="page-dashboard" class="page active">
+      <div class="page-header">
+        <div>
+          <div class="page-title">대시보드</div>
+          <div class="page-sub" id="today-date"></div>
+        </div>
+        <button class="btn btn-primary" onclick="triggerTodayGeneration()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          오늘 콘텐츠 생성
+        </button>
+      </div>
+
+      <!-- 실행 중인 작업 패널 (작업이 있을 때만 표시) -->
+      <div id="active-tasks-panel" style="display:none;margin-bottom:16px">
+        <div style="background:#1a1228;border:1px solid var(--accent);border-radius:12px;padding:16px 20px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div class="loading" style="border-color:#7c3aed44;border-top-color:var(--accent2)"></div>
+            <span style="font-size:13px;font-weight:600;color:var(--accent2)">실행 중인 작업</span>
+            <button id="bm-stop-btn" onclick="stopBenchmarking()" class="btn btn-xs btn-red" style="margin-left:auto;display:none">⏹ 스크랩 정지</button>
+          </div>
+          <div id="active-tasks-list"></div>
+        </div>
+      </div>
+
+      <!-- 승인 대기 알람 배너 -->
+      <div id="dashboard-pending-alert" style="display:none;align-items:center;gap:10px;padding:10px 16px;margin-bottom:12px;background:#1e1040;border:1px solid var(--accent);border-radius:8px;font-size:13px"></div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px" id="stats-grid">
+        <div class="stat-card" onclick="navigate('projects')" style="cursor:pointer" title="프로젝트 관리">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+            <div class="stat-label">프로젝트</div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" opacity=".7"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <div class="stat-value purple" id="stat-projects">-</div>
+        </div>
+        <div class="stat-card" onclick="navigate('preview')" style="cursor:pointer" title="미리보기에서 승인하기">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+            <div class="stat-label">승인 대기</div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2" opacity=".7"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="stat-value yellow" id="stat-pending">-</div>
+        </div>
+        <div class="stat-card" onclick="navigate('history')" style="cursor:pointer" title="포스트 기록 보기">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+            <div class="stat-label">포스팅 완료</div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9d5cf5" stroke-width="2" opacity=".7"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="stat-value purple" id="stat-total-posted">-</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">예약됨 + 발행됨 전체</div>
+        </div>
+        <div class="stat-card" onclick="navigate('history')" style="cursor:pointer" title="포스트 기록 보기">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+            <div class="stat-label">오늘 게시완료</div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" opacity=".7"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div class="stat-value green" id="stat-posted">-</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">예약됨 + 발행됨</div>
+        </div>
+      </div>
+
+      <!-- 벤치마킹 현황 (활성 프로젝트가 있을 때만 표시) -->
+      <div id="bm-overview-card" style="display:none;margin-bottom:16px">
+        <div class="card">
+          <div class="flex-between mb-16">
+            <div class="section-title">🔍 벤치마킹 현황</div>
+            <div class="flex gap-8">
+              <button class="btn btn-xs btn-secondary" onclick="loadBenchmarkingOverview()">새로고침</button>
+              <button class="btn btn-xs btn-red" id="bm-stop-overview-btn" onclick="stopBenchmarking()" style="display:none">⏹ 정지</button>
+              <button class="btn btn-xs btn-primary" id="bm-run-all-btn" onclick="triggerBenchmarkingAll()">▶ 전체 스크랩</button>
+            </div>
+          </div>
+          <div id="bm-overview-list"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Preview -->
+    <div id="page-preview" class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-title">오늘 미리보기</div>
+          <div class="page-sub">포스팅 전 내용을 확인하고 승인하세요</div>
+        </div>
+        <div class="flex gap-8">
+          <button class="btn btn-secondary btn-sm" onclick="loadPreview()">새로고침</button>
+          <button class="btn btn-primary btn-sm" onclick="openQuickAddModal()">+ 포스팅 추가</button>
+          <button class="btn btn-green" onclick="approveAll()">전체 승인</button>
+        </div>
+      </div>
+      <!-- 프로젝트 필터 -->
+      <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span class="text-sm text-muted" style="margin-right:4px">프로젝트:</span>
+        <div id="preview-project-filters" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <!-- 타입 필터 -->
+      <div style="margin-bottom:20px;display:flex;gap:8px;align-items:center">
+        <span class="text-sm text-muted" style="margin-right:4px">종류:</span>
+        <button class="btn btn-sm btn-primary" id="filter-all" onclick="setPreviewFilter('all')">전체</button>
+        <button class="btn btn-sm btn-secondary" id="filter-scheduled" onclick="setPreviewFilter('scheduled')">스케줄</button>
+        <button class="btn btn-sm btn-secondary" id="filter-benchmarking" onclick="setPreviewFilter('benchmarking')">벤치마킹</button>
+      </div>
+      <div id="preview-list"></div>
+    </div>
+
+    <!-- History -->
+    <div id="page-history" class="page">
+      <div class="page-header">
+        <div class="page-title">포스트 기록</div>
+        <button class="btn btn-secondary btn-sm" onclick="loadHistory()">새로고침</button>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <select id="history-filter-account" onchange="loadHistory()" style="font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text)">
+            <option value="">전체 계정</option>
+          </select>
+          <select id="history-filter-project" onchange="loadHistory()" style="font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text)">
+            <option value="">전체 프로젝트</option>
+          </select>
+          <select id="history-filter-status" onchange="loadHistory()" style="font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text)">
+            <option value="">발행완료 + 예약됨</option>
+            <option value="posted">발행됨</option>
+            <option value="scheduled">예약됨</option>
+            <option value="approved">승인됨</option>
+            <option value="failed">실패</option>
+            <option value="generated">승인대기</option>
+          </select>
+        </div>
+      </div>
+      <div id="history-today-section"></div>
+      <div id="history-calendar-section" style="margin-bottom:16px"></div>
+      <div class="card">
+        <div class="table-wrap" id="history-table"></div>
+      </div>
+    </div>
+
+    <!-- Projects -->
+    <div id="page-projects" class="page">
+      <div class="page-header">
+        <div class="page-title">프로젝트 관리</div>
+        <button class="btn btn-primary" onclick="openProjectModal()">+ 프로젝트 추가</button>
+      </div>
+      <div id="projects-list"></div>
+    </div>
+
+    <!-- Pending (발행대기) -->
+    <div id="page-pending" class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-title">발행대기</div>
+          <div class="page-sub">승인된 포스트를 선택해 Threads 예약 / 자동 발행 / 즉시 발행 중 선택합니다</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div id="batch-status-panel" style="display:none;font-size:12px;color:var(--accent2);align-items:center;gap:6px">
+            <div class="loading" style="border-color:#7c3aed44;border-top-color:var(--accent2)"></div>
+            <span>예약 등록 중...</span>
+          </div>
+          <button class="btn btn-secondary" onclick="loadPending()">새로고침</button>
+          <button class="btn btn-secondary" id="batch-auto-btn" onclick="batchAutoPublish()" disabled title="지정 시간에 서버가 자동 발행 (PC 켜져있어야 함)">
+            ⏰ 자동 발행
+          </button>
+          <button class="btn btn-primary" id="batch-native-btn" onclick="batchScheduleNative()" disabled title="Threads 자체 예약 기능 사용 (PC 꺼도 발행됨)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
+            Threads 예약
+          </button>
+          <button class="btn btn-secondary" id="batch-now-btn" onclick="batchPostNow()" disabled title="선택한 포스트를 지금 즉시 발행 (브라우저가 열립니다)" style="color:var(--green);border-color:var(--green)">
+            ▶ 즉시 발행
+          </button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:500">
+            <input type="checkbox" id="select-all-pending" onchange="toggleSelectAllPending(this.checked)" style="width:15px;height:15px">
+            전체 선택
+          </label>
+          <span id="pending-selected-count" style="font-size:12px;color:var(--text2)">선택 없음</span>
+          <div style="margin-left:auto;font-size:12px;color:var(--text2)">
+            📅 <b>Threads 예약</b>: PC 꺼도 발행됨 &nbsp;|&nbsp; ⏰ <b>자동 발행</b>: 지정 시간에 서버가 직접 발행 (PC 켜야 함) &nbsp;|&nbsp; ▶ <b>즉시 발행</b>: 지금 바로 발행
+          </div>
+        </div>
+      </div>
+      <div id="pending-generated-notice" style="display:none;align-items:center;gap:10px;padding:10px 14px;margin-bottom:12px;background:#1e1040;border:1px solid var(--accent);border-radius:8px;font-size:13px;flex-wrap:wrap"></div>
+      <div id="pending-list"></div>
+    </div>
+
+    <!-- Schedules -->
+    <div id="page-schedules" class="page">
+      <div class="page-header">
+        <div class="page-title">스케줄 관리</div>
+        <button class="btn btn-primary" onclick="openScheduleModal()">+ 스케줄 추가</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap" id="schedules-table"></div>
+      </div>
+    </div>
+
+    <!-- ─── 스크랩 데이터 ───────────────────────────────────────────────────── -->
+    <div id="page-scrapes" class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-title">스크랩 데이터</div>
+          <div class="page-sub">벤치마킹으로 수집된 원본 게시글 데이터</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-secondary" onclick="loadScrapes()">새로고침</button>
+          <button class="btn btn-secondary" onclick="exportScrapesCSV()" title="CSV 파일로 다운로드 (Excel/Sheets에서 열기 가능)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            CSV 내보내기
+          </button>
+          <button id="open-sheet-btn" class="btn btn-secondary" onclick="openGoogleSheet()" title="구글 시트 열기" style="display:none">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            구글시트 보러가기
+          </button>
+          <button class="btn btn-primary" onclick="openSheetsModal()" title="Google Sheets에 자동 전송">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+            Google Sheets 연동
+          </button>
+        </div>
+      </div>
+
+      <!-- 필터 -->
+      <div class="card" style="margin-bottom:12px;padding:12px 16px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <select id="scrapes-filter-project" onchange="loadScrapes()" style="font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text)">
+            <option value="">전체 프로젝트</option>
+          </select>
+          <select id="scrapes-filter-account" onchange="loadScrapes()" style="font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text)">
+            <option value="">전체 계정</option>
+          </select>
+          <span id="scrapes-count" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
+        </div>
+      </div>
+
+      <!-- 계정별 수동 스크랩 -->
+      <div id="scrape-targets-panel" class="card" style="margin-bottom:12px;padding:14px 16px;display:none">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+          계정별 수동 스크랩
+        </div>
+        <div id="scrape-targets-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
+
+      <!-- 스프레드시트 테이블 -->
+      <div class="card" style="padding:0;overflow:hidden">
+        <div id="scrapes-table-wrap" style="overflow-x:auto">
+          <table id="scrapes-table" style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead>
+              <tr style="background:var(--surface2);position:sticky;top:0;z-index:1">
+                <th style="padding:10px 12px;text-align:left;font-weight:600;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border);width:40px">#</th>
+                <th style="padding:10px 12px;text-align:left;font-weight:600;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border)">스크랩일시</th>
+                <th style="padding:10px 12px;text-align:left;font-weight:600;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border)">내 계정</th>
+                <th style="padding:10px 12px;text-align:left;font-weight:600;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border)">원본 계정</th>
+                <th style="padding:10px 12px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);min-width:260px">원문 본문</th>
+                <th style="padding:10px 12px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);min-width:160px">첫 댓글</th>
+                <th style="padding:10px 12px;text-align:left;font-weight:600;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border)">미디어</th>
+                <th style="padding:10px 12px;text-align:left;font-weight:600;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border)">원본 링크</th>
+                <th style="padding:10px 12px;text-align:left;font-weight:600;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border)">액션</th>
+              </tr>
+            </thead>
+            <tbody id="scrapes-tbody">
+              <tr><td colspan="9" style="padding:40px;text-align:center;color:var(--text2)">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Google Sheets 연동 모달 -->
+<div class="modal-overlay" id="modal-sheets">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <div class="modal-title">Google Sheets 자동 연동 설정</div>
+      <button class="modal-close" onclick="closeModal('modal-sheets')">×</button>
+    </div>
+    <div style="padding-bottom:4px">
+
+      <!-- 단계 안내 -->
+      <div style="background:var(--surface2);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:16px">
+        Apps Script 웹훅 방식으로 연동합니다. Google Cloud 계정·OAuth 설정 없이 5분 안에 완료됩니다.
+      </div>
+
+      <!-- STEP 1 -->
+      <div style="display:flex;gap:12px;margin-bottom:14px;align-items:flex-start">
+        <div style="min-width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px">1</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">연동할 Google Sheets 파일에서 Apps Script 열기</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:8px">확장 프로그램 → Apps Script 클릭</div>
+          <a href="https://script.google.com" target="_blank" class="btn btn-secondary" style="font-size:12px;text-decoration:none;display:inline-block">Google Apps Script 열기</a>
+        </div>
+      </div>
+
+      <!-- STEP 2 -->
+      <div style="display:flex;gap:12px;margin-bottom:14px;align-items:flex-start">
+        <div style="min-width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px">2</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">아래 코드 전체를 복사해서 붙여넣기 후 저장</div>
+          <div style="position:relative">
+            <pre id="apps-script-code" style="background:#0d0d0d;border-radius:6px;padding:10px 10px 10px 12px;font-size:11px;overflow-x:auto;color:#a8d8a8;line-height:1.6;margin:0">function doPost(e) {
+  var data = JSON.parse(e.postData.contents);
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var rows = data.rows;
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(['ID','스크랩일시','프로젝트','계정','원본계정','원본URL','원문본문','첫댓글','미디어URL']);
+  }
+  rows.forEach(function(r) {
+    sheet.appendRow([r.id, r.scraped_at, r.project_name, r.username, r.source_username, r.source_url, r.text_content, r.first_comment, r.media_urls]);
+  });
+  return ContentService.createTextOutput(JSON.stringify({ok:true,count:rows.length})).setMimeType(ContentService.MimeType.JSON);
+}</pre>
+            <button onclick="copyAppsScriptCode()" style="position:absolute;top:6px;right:6px;background:var(--surface);border:1px solid var(--border);color:var(--text2);border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer">복사</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3 -->
+      <div style="display:flex;gap:12px;margin-bottom:14px;align-items:flex-start">
+        <div style="min-width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px">3</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">배포 → 새 배포 → 웹 앱</div>
+          <div style="font-size:12px;color:var(--text2)">실행 대상: <b>나</b> · 액세스 권한: <b>모든 사용자</b> → 배포 클릭<br>승인 팝업이 뜨면 허용 후 웹 앱 URL 복사</div>
+        </div>
+      </div>
+
+      <!-- STEP 4 -->
+      <div style="display:flex;gap:12px;margin-bottom:12px;align-items:flex-start">
+        <div style="min-width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px">4</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;margin-bottom:6px">웹 앱 URL 붙여넣기 후 연결 테스트</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input class="form-input" id="sheets-webhook-url" placeholder="https://script.google.com/macros/s/..." style="font-size:12px;flex:1;margin:0">
+            <button class="btn btn-secondary" onclick="testSheetsWebhook()" style="white-space:nowrap;font-size:12px">연결 테스트</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 5 - 시트 URL -->
+      <div style="display:flex;gap:12px;margin-bottom:6px;align-items:flex-start">
+        <div style="min-width:24px;height:24px;border-radius:50%;background:var(--surface2);color:var(--text2);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px">5</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">구글 시트 URL 입력 (선택)</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:6px">스크랩 탭에 "구글시트 보러가기" 버튼이 추가됩니다.</div>
+          <input class="form-input" id="sheets-view-url" placeholder="https://docs.google.com/spreadsheets/d/..." style="font-size:12px;width:100%">
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-sheets')">닫기</button>
+      <button class="btn btn-primary" onclick="saveSheetsWebhook()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modals -->
+<div class="modal-overlay" id="modal-project">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-project-title">새 프로젝트</div>
+      <button class="modal-close" onclick="closeModal('modal-project')">×</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">프로젝트 이름 *</label>
+      <input class="form-input" id="proj-name" placeholder="예: 일상 브이로그, 맛집 리뷰...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">설명</label>
+      <input class="form-input" id="proj-desc" placeholder="프로젝트 설명">
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('modal-project')">취소</button>
+      <button type="button" class="btn btn-primary" onclick="saveProject()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Project Detail Modal -->
+<div class="modal-overlay" id="modal-project-detail">
+  <div class="modal" style="width:680px">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-detail-title">프로젝트 설정</div>
+      <button class="modal-close" onclick="closeModal('modal-project-detail')">×</button>
+    </div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab(this,'tab-accounts')">계정</div>
+      <div class="tab" onclick="switchTab(this,'tab-ai')">AI 설정</div>
+      <div class="tab" onclick="switchTab(this,'tab-template')">포스트 템플릿</div>
+      <div class="tab" onclick="switchTab(this,'tab-benchmarking')">벤치마킹</div>
+      <div class="tab" onclick="switchTab(this,'tab-schedules')">연결 스케줄</div>
+    </div>
+
+    <!-- 계정 탭 -->
+    <div id="tab-accounts">
+      <div class="flex-between mb-16">
+        <div class="section-title">Threads 계정</div>
+        <button class="btn btn-primary btn-sm" onclick="openAddAccount()">+ 계정 추가</button>
+      </div>
+      <div id="accounts-list"></div>
+    </div>
+
+    <!-- AI 설정 탭 -->
+    <div id="tab-ai" style="display:none">
+      <div class="flex-between mb-16">
+        <div class="section-title">AI 설정</div>
+        <button class="btn btn-primary btn-sm" onclick="openAddAI()">+ AI 추가</button>
+      </div>
+      <div id="ai-list"></div>
+    </div>
+
+    <!-- 템플릿 탭 -->
+    <div id="tab-template" style="display:none">
+      <div class="flex-between mb-16">
+        <div class="section-title">포스트 템플릿</div>
+        <button class="btn btn-primary btn-sm" onclick="openAddTemplate()">+ 템플릿 추가</button>
+      </div>
+      <div id="template-list"></div>
+    </div>
+
+    <!-- 벤치마킹 탭 -->
+    <div id="tab-benchmarking" style="display:none">
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text)">
+          <input type="checkbox" id="bm-enabled" style="width:16px;height:16px">
+          벤치마킹 활성화
+        </label>
+        <div class="form-hint">활성화하면 설정된 주기마다 대상 계정의 새 게시글을 가져와 미리보기에 추가합니다</div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">타겟당 스크랩 수</label>
+          <input class="form-input" type="number" id="bm-posts-per-run" min="1" max="10" value="1" placeholder="1">
+          <div class="form-hint">각 타겟 계정에서 스크랩할 포스트 수 (스케줄의 포스팅 횟수에 맞게 설정)</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">포스팅 계정</label>
+          <select class="form-select" id="bm-posting-account">
+            <option value="">— 선택 —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="display:none">
+        <input class="form-input" type="number" id="bm-interval-hours" value="6">
+      </div>
+      <div class="form-group">
+        <label class="form-label">AI 재작성 설정 <span class="text-muted">(선택)</span></label>
+        <select class="form-select" id="bm-ai-config">
+          <option value="">— AI 없음 (원본 그대로 사용) —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">재작성 프롬프트 <span class="text-muted">(AI를 선택한 경우)</span></label>
+        <textarea class="form-textarea" id="bm-rewrite-prompt" rows="4" placeholder="예: 아래 Threads 게시글을 내 계정 스타일에 맞게 자연스럽게 재작성해줘. 원문의 핵심 내용은 유지하되 표현을 바꿔줘."></textarea>
+        <div class="form-hint">이 프롬프트 뒤에 원본 내용이 자동으로 추가됩니다</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="flex-between mb-16">
+        <div class="section-title" style="margin:0">대상 계정 목록</div>
+        <button class="btn btn-secondary btn-sm" onclick="addBmTarget()">+ 추가</button>
+      </div>
+      <div id="bm-targets-list" style="margin-bottom:16px"></div>
+
+      <div class="flex gap-8">
+        <button class="btn btn-primary" onclick="saveBmConfig()">벤치마킹 설정 저장</button>
+        <button class="btn btn-secondary" onclick="runBmForProject()" id="bm-run-btn">▶ 지금 실행</button>
+      </div>
+    </div>
+
+    <!-- 연결 스케줄 탭 -->
+    <div id="tab-schedules" style="display:none">
+      <div class="flex-between mb-16">
+        <div>
+          <div class="section-title" style="margin-bottom:4px">연결 스케줄 — 계정 · AI · 템플릿</div>
+          <div class="text-sm text-muted">어떤 계정이 어떤 AI와 템플릿으로 언제 포스팅하는지 확인하고 관리합니다.</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openScheduleFromProject()">+ 스케줄 추가</button>
+      </div>
+      <div id="project-schedules-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Account Modal -->
+<div class="modal-overlay" id="modal-account">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Threads 계정 추가</div>
+      <button class="modal-close" onclick="closeModal('modal-account')">×</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">@유저네임 *</label>
+      <input class="form-input" id="acc-username" placeholder="threads_username">
+    </div>
+    <div class="form-group">
+      <label class="form-label">표시 이름</label>
+      <input class="form-input" id="acc-display" placeholder="닉네임 (선택)">
+    </div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px">
+      <p style="font-size:12px;color:var(--text2);line-height:1.6">💡 계정을 추가하면 별도의 브라우저 프로필이 생성됩니다.<br>저장 후 <b>"로그인 설정"</b> 버튼을 클릭해 브라우저에서 로그인하세요.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-account')">취소</button>
+      <button class="btn btn-primary" onclick="saveAccount()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add AI Modal -->
+<div class="modal-overlay" id="modal-ai">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">AI 설정 추가</div>
+      <button class="modal-close" onclick="closeModal('modal-ai')">×</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">이름 *</label>
+      <input class="form-input" id="ai-name" placeholder="예: Claude 크리에이터용">
+    </div>
+    <div class="form-group">
+      <label class="form-label">AI 종류</label>
+      <select class="form-select" id="ai-type" onchange="onAITypeChange()">
+        <option value="claude">Claude (claude.ai)</option>
+        <option value="gemini">Gemini (gemini.google.com)</option>
+        <option value="genspark">Genspark (genspark.ai)</option>
+        <option value="custom">커스텀 URL</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">URL *</label>
+      <input class="form-input" id="ai-url" placeholder="https://claude.ai/new">
+      <div class="form-hint">직접 접속하는 AI 채팅 URL (로그인된 채팅 창)</div>
+    </div>
+    <div id="custom-selectors" style="display:none">
+      <div class="form-group">
+        <label class="form-label">입력창 CSS 셀렉터</label>
+        <input class="form-input" id="ai-input-sel" placeholder="[contenteditable='true']">
+      </div>
+      <div class="form-group">
+        <label class="form-label">전송버튼 CSS 셀렉터</label>
+        <input class="form-input" id="ai-submit-sel" placeholder="button[type='submit']">
+      </div>
+      <div class="form-group">
+        <label class="form-label">응답 CSS 셀렉터</label>
+        <input class="form-input" id="ai-output-sel" placeholder=".response-content">
+      </div>
+    </div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px">
+      <p style="font-size:12px;color:var(--text2);line-height:1.6">💡 저장 후 <b>"로그인 설정"</b> 버튼을 클릭해 해당 AI에 로그인하세요.<br>로그인 상태가 브라우저 프로필에 저장됩니다.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-ai')">취소</button>
+      <button class="btn btn-primary" onclick="saveAI()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Template Modal -->
+<div class="modal-overlay" id="modal-template">
+  <div class="modal" style="width:640px">
+    <div class="modal-header">
+      <div class="modal-title">포스트 템플릿</div>
+      <button class="modal-close" onclick="closeModal('modal-template')">×</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">템플릿 이름</label>
+      <input class="form-input" id="tmpl-name" placeholder="기본 템플릿">
+    </div>
+    <div class="form-group">
+      <label class="form-label">AI 프롬프트 (메인 글) *</label>
+      <textarea class="form-textarea" id="tmpl-prompt" style="min-height:160px" placeholder="AI에게 보낼 프롬프트를 작성하세요.
+
+사용 가능한 변수:
+{date} - 오늘 날짜 (예: 2024년 3월 15일 금요일)
+
+예시: 오늘({date}) 쓰레드에 올릴 일상 글을 500자 이내로 작성해줘. 친근하고 자연스러운 말투로."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">댓글 내용</label>
+      <textarea class="form-textarea" id="tmpl-comment" style="min-height:80px" placeholder="게시글에 달 댓글 내용을 입력하세요."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">해시태그</label>
+      <div class="flex gap-8 mb-8" id="hashtag-list"></div>
+      <div class="flex gap-8">
+        <input class="form-input" id="tmpl-hashtag-input" placeholder="태그 입력 후 Enter" onkeydown="addHashtag(event)" style="flex:1">
+        <button class="btn btn-secondary btn-sm" onclick="addHashtag({key:'Enter'})">추가</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-template')">취소</button>
+      <button class="btn btn-primary" onclick="saveTemplate()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Test Result Modal -->
+<div class="modal-overlay" id="modal-test">
+  <div class="modal" style="width:680px">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-test-title">테스트 결과</div>
+      <button class="modal-close" onclick="closeModal('modal-test')">×</button>
+    </div>
+    <div id="modal-test-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-test')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule Modal -->
+<div class="modal-overlay" id="modal-schedule">
+  <div class="modal" style="width:600px">
+    <div class="modal-header">
+      <div class="modal-title">스케줄 추가</div>
+      <button class="modal-close" onclick="closeModal('modal-schedule')">×</button>
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">프로젝트 *</label>
+        <select class="form-select" id="sch-project" onchange="loadScheduleOptions()"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">계정 *</label>
+        <select class="form-select" id="sch-account"></select>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">AI 설정 *</label>
+        <select class="form-select" id="sch-ai"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">포스트 템플릿 *</label>
+        <select class="form-select" id="sch-template"></select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">콘텐츠 생성 시간 (미리보기)</label>
+      <input class="form-input" id="sch-preview-time" type="time" value="09:00">
+      <div class="form-hint">이 시간에 AI가 콘텐츠를 생성하고 미리보기 화면에 표시됩니다</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">포스팅 시간</label>
+      <div id="post-times-list" class="flex gap-8 flex-wrap mb-8"></div>
+      <div class="flex gap-8">
+        <input class="form-input" id="sch-post-time-input" type="time" style="width:140px">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="addPostTime()">+ 추가</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">활성 요일</label>
+      <div class="checkbox-group" id="day-selector">
+        <div class="checkbox-day selected" data-day="1" onclick="toggleDay(this)">월</div>
+        <div class="checkbox-day selected" data-day="2" onclick="toggleDay(this)">화</div>
+        <div class="checkbox-day selected" data-day="3" onclick="toggleDay(this)">수</div>
+        <div class="checkbox-day selected" data-day="4" onclick="toggleDay(this)">목</div>
+        <div class="checkbox-day selected" data-day="5" onclick="toggleDay(this)">금</div>
+        <div class="checkbox-day selected" data-day="6" onclick="toggleDay(this)">토</div>
+        <div class="checkbox-day selected" data-day="7" onclick="toggleDay(this)">일</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">타이밍 랜덤 변동 (분)</label>
+      <input class="form-input" id="sch-variance" type="number" value="5" min="0" max="30">
+      <div class="form-hint">설정 시간 ±N분 사이 랜덤하게 포스팅 (같은 시간 반복 방지)</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-schedule')">취소</button>
+      <button class="btn btn-primary" onclick="saveSchedule()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Add Post Modal -->
+<div class="modal-overlay" id="modal-quick-add">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">포스팅 추가하기</div>
+      <button class="modal-close" onclick="closeModal('modal-quick-add')">×</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">프로젝트 *</label>
+      <select class="form-select" id="qa-project" onchange="onQuickAddProjectChange()">
+        <option value="">— 프로젝트 선택 —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">계정 *</label>
+      <select class="form-select" id="qa-account" disabled onchange="onQuickAddAccountChange()">
+        <option value="">— 먼저 프로젝트 선택 —</option>
+      </select>
+    </div>
+    <!-- 벤치마킹 계정 감지 시 표시 -->
+    <div id="qa-bm-notice" style="display:none;margin-bottom:12px">
+      <div style="background:#1a1228;border:1px dashed #7c3aed;border-radius:8px;padding:12px 14px">
+        <div style="font-size:12px;font-weight:600;color:#9d5cf5;margin-bottom:6px">🔍 벤치마킹 계정 감지됨</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px">이 계정은 벤치마킹 포스팅 전용 계정입니다.<br>스크랩을 실행하면 대상 계정의 인기 게시글을 분석 후 AI가 재작성합니다.</div>
+        <div id="qa-bm-pending-info" style="font-size:12px;color:var(--text2)"></div>
+      </div>
+    </div>
+    <!-- 일반 포스트 생성 필드 (벤치마킹 모드에선 숨김) -->
+    <div id="qa-normal-fields">
+      <div class="form-group">
+        <label class="form-label">AI 설정 *</label>
+        <select class="form-select" id="qa-ai-config" disabled>
+          <option value="">— 먼저 프로젝트 선택 —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">포스트 템플릿 *</label>
+        <select class="form-select" id="qa-template" disabled>
+          <option value="">— 먼저 프로젝트 선택 —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">예약 시간 *</label>
+        <input class="form-input" type="datetime-local" id="qa-scheduled-time">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('modal-quick-add')">취소</button>
+      <button type="button" class="btn btn-primary" id="qa-save-btn" onclick="saveQuickAdd()">포스트 생성</button>
+    </div>
+  </div>
+</div>
+
+<!-- API Token Modal -->
+<div class="modal-overlay" id="modal-api-token">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">Threads API 토큰 연결</div>
+      <button class="modal-close" onclick="closeModal('modal-api-token')">×</button>
+    </div>
+    <div id="modal-api-token-status" style="margin-bottom:16px"></div>
+    <div class="form-group">
+      <label class="form-label">Access Token *</label>
+      <input class="form-input" id="api-token-input" type="password" placeholder="EAAxxxxxxxxxx...">
+      <div class="form-hint">Threads API에서 발급받은 장기 토큰 (60일 유효)</div>
+    </div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;color:var(--text2);line-height:1.6">
+      💡 토큰 등록 후 텍스트 포스트는 <b>브라우저 없이 API로 직접 발행</b>됩니다.<br>
+      API 발행 실패 시 자동으로 브라우저 방식으로 전환됩니다.
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="api-token-remove-btn" onclick="removeApiToken()" style="display:none;margin-right:auto">토큰 삭제</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-api-token')">취소</button>
+      <button class="btn btn-primary" onclick="saveApiToken()">검증 후 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

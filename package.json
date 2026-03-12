@@ -1,0 +1,31 @@
+{
+  "name": "threads-autoposter",
+  "version": "1.0.0",
+  "description": "Threads 자동 포스팅 - 사람처럼 동작하는 스케줄 기반 AI 콘텐츠 발행 도구",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch --no-warnings=ExperimentalWarning src/index.ts",
+    "build": "tsc",
+    "start": "node --no-warnings=ExperimentalWarning dist/index.js",
+    "setup:browsers": "playwright install chromium",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "express": "^4.18.3",
+    "googleapis": "^171.4.0",
+    "node-cron": "^3.0.3",
+    "playwright": "^1.43.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.0.0",
+    "@types/node-cron": "^3.0.11",
+    "@vitest/coverage-v8": "^4.0.18",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.3",
+    "vitest": "^4.0.18"
+  }
+}

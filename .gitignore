@@ -1,0 +1,35 @@
+# ─── Dependencies ───────────────────────────────────────
+node_modules/
+
+# ─── Build output ────────────────────────────────────────
+dist/
+
+# ─── Runtime data (DB, browser profiles, media) ──────────
+data/autoposter.db
+data/autoposter.db-shm
+data/autoposter.db-wal
+data/browser-profiles/
+data/media/
+data/last_scraped.json
+data/benchmarking.config.json
+
+# data 폴더 자체는 유지 (구조만 트래킹)
+!data/.gitkeep
+!data/media/.gitkeep
+
+# ─── Temp / Logs ─────────────────────────────────────────
+temp_media/
+logs/
+
+# ─── OS / Editor ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# ─── Secrets / Env ───────────────────────────────────────
+.env
+.env.local
+*.pem
+google-credentials.json
