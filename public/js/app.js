@@ -1,3 +1,23 @@
+// ─── API_BASE ────────────────────────────────────────────────────────────────
+// 웹 호스팅 환경: 사용자 PC의 로컬 백엔드(http://localhost:4000)로 호출
+// 로컬 번들 환경(Electron/데스크탑): same-origin('')
+// localStorage 'api_base_override' 로 수동 지정 가능 (예: 다른 포트)
+const API_BASE = (() => {
+  const override = localStorage.getItem('api_base_override');
+  if (override) return override.replace(/\/$/, '');
+  if (location.origin === 'http://localhost:4000') return '';
+  return 'http://localhost:4000';
+})();
+
+// DB에 저장된 미디어 경로(/media/...)를 로컬 백엔드 절대 URL로 변환
+// — 웹 호스팅 환경에서 vercel.app에서 /media/ 요청이 나가면 404이므로 필수
+function mediaUrl(path) {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;   // 이미 절대 URL
+  if (path.startsWith('/')) return API_BASE + path;
+  return API_BASE + '/' + path;
+}
+
 // ─── State ────────────────────────────────────────────────────────────────────
 let currentPage = 'dashboard';
 let activeTasksTimer = null;
@@ -45,7 +65,8 @@ function navigate(page) {
 
 // ─── API helper ───────────────────────────────────────────────────────────────
 async function api(method, url, body) {
-  const res = await fetch(url, {
+  const fullUrl = url.startsWith('http') ? url : API_BASE + url;
+  const res = await fetch(fullUrl, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
@@ -386,8 +407,9 @@ function renderPreview() {
       </div>` : '';
 
     // ── 미디어 섹션 ─────────────────────────────────────────────────────────
-    const mediaItems = mediaPaths.map((src, idx) => {
-      const isVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(src.split('?')[0]);
+    const mediaItems = mediaPaths.map((rawSrc, idx) => {
+      const src = mediaUrl(rawSrc);
+      const isVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(rawSrc.split('?')[0]);
       const media = isVideo
         ? `<video src="${escHtml(src)}" controls style="max-width:100%;max-height:240px;border-radius:6px;border:1px solid var(--border);display:block"></video>`
         : `<img src="${escHtml(src)}" style="width:160px;height:120px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer;display:block" onclick="window.open(this.src,'_blank')" onerror="this.style.display='none'">`;
@@ -676,7 +698,7 @@ async function saveScheduledTime(postId) {
   const isoStr = localDate.toISOString();
 
   try {
-    const r = await fetch(`/api/posts/${postId}/scheduled-time`, {
+    const r = await fetch(`${API_BASE}/api/posts/${postId}/scheduled-time`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scheduled_time: isoStr }),
@@ -907,17 +929,19 @@ function renderPending() {
       for (const post of acc.posts) {
         const isBm = post.source_type === 'benchmarking';
         const mediaPaths = JSON.parse(post.media_paths || '[]');
+        const isAutoMode = post.publish_mode === 'auto';
         const checked = pendingSelectedIds.has(post.id) ? 'checked' : '';
         const scheduledLabel = formatScheduledTime(post.scheduled_time);
         const preview = (post.generated_content || '').replace(/</g, '&lt;').substring(0, 120);
 
         html += `
-          <div class="card-sm" id="pending-card-${post.id}" style="display:flex;gap:12px;align-items:flex-start;border:1px solid ${pendingSelectedIds.has(post.id) ? 'var(--accent)' : 'var(--border)'}">
+          <div class="card-sm" id="pending-card-${post.id}" style="display:flex;gap:12px;align-items:flex-start;border:1px solid ${isAutoMode ? 'var(--accent2)' : pendingSelectedIds.has(post.id) ? 'var(--accent)' : 'var(--border)'}">
             <input type="checkbox" ${checked} onchange="togglePendingPost(${post.id}, this.checked)"
               style="width:16px;height:16px;margin-top:3px;flex-shrink:0;cursor:pointer">
             <div style="flex:1;min-width:0">
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
                 <span style="font-size:12px;color:var(--accent2);font-weight:500">📅 ${escHtml(scheduledLabel)}</span>
+                ${isAutoMode ? '<span class="badge badge-blue" title="지정 시간에 서버가 자동 발행합니다 (PC 켜져있어야 함)">⏰ 자동발행 예정</span>' : ''}
                 ${isBm ? '<span class="badge badge-purple">벤치마킹</span>' : ''}
                 ${mediaPaths.length > 0 ? `<span class="badge badge-gray">🖼 미디어 ${mediaPaths.length}개</span>` : ''}
               </div>
@@ -1070,7 +1094,8 @@ async function batchAutoPublish() {
   const postIds = [...pendingSelectedIds];
   try {
     await api('POST', '/api/posts/publish-mode', { postIds, mode: 'auto' });
-    toast(`${postIds.length}개 포스트가 자동 발행 모드로 설정되었습니다. 지정 시간에 서버가 발행합니다.`, 'success');
+    toast(`${postIds.length}개 포스트에 ⏰ 자동발행 예정 설정됨 — 지정 시간에 서버가 발행합니다 (PC 켜져있어야 함)`, 'success');
+    pendingSelectedIds.clear();
     loadPending();
   } catch (e) {
     toast('자동 발행 설정 실패: ' + e.message, 'error');
@@ -1941,6 +1966,36 @@ document.getElementById('today-date').textContent = new Date().toLocaleDateStrin
   year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
 });
 
+// ─── 백엔드 연결 상태 체크 (웹 호스팅 환경에서만 의미 있음) ──────────────────
+async function checkBackendConnection() {
+  const banner = document.getElementById('backend-status-banner');
+  if (!banner) return;
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(`${API_BASE}/api/health`, { signal: controller.signal, mode: 'cors' });
+    clearTimeout(t);
+    if (res.ok) {
+      banner.style.display = 'none';
+      return true;
+    }
+    throw new Error('Bad status');
+  } catch (e) {
+    banner.style.display = '';
+    return false;
+  }
+}
+// 초기 체크 + 주기적 재확인
+checkBackendConnection();
+setInterval(checkBackendConnection, 15000);
+
+// ─── 모바일 감지 배너 (PC 전용 안내) ─────────────────────────────────────────
+(function showMobileNoticeIfNeeded() {
+  const isMobile = window.matchMedia('(max-width: 900px)').matches;
+  const banner = document.getElementById('mobile-pc-only-banner');
+  if (banner && isMobile) banner.style.display = '';
+})();
+
 // 마지막 페이지 복원
 const savedPage = localStorage.getItem('currentPage');
 navigate(savedPage || 'dashboard');
@@ -2638,6 +2693,95 @@ async function toggleBmProjectDetail(projectId, btn) {
 
 // ─── 스크랩 데이터 ─────────────────────────────────────────────────────────────
 let scrapesData = [];
+let scrapeProgressTimer = null;
+let lastScrapeProgressLogLen = 0;
+
+function startScrapeProgressPolling() {
+  if (scrapeProgressTimer) return;
+  lastScrapeProgressLogLen = 0;
+  scrapeProgressTimer = setInterval(async () => {
+    if (currentPage !== 'scrapes') {
+      stopScrapeProgressPolling();
+      return;
+    }
+    try {
+      const p = await api('GET', '/api/benchmarking/progress');
+      updateScrapeProgressUI(p);
+      if (!p.running) {
+        stopScrapeProgressPolling();
+        // 완료 후 스크랩 데이터 새로고침
+        await loadScrapes();
+      }
+    } catch (e) { /* ignore */ }
+  }, 2000);
+}
+
+function stopScrapeProgressPolling() {
+  if (scrapeProgressTimer) { clearInterval(scrapeProgressTimer); scrapeProgressTimer = null; }
+}
+
+function updateScrapeProgressUI(p) {
+  const panel = document.getElementById('scrape-progress-panel');
+  if (!panel) return;
+
+  if (!p.running && (!p.log || p.log.length === 0)) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = '';
+
+  // 제목: 마지막 '프로젝트 시작' 로그에서 추출
+  const titleEl = document.getElementById('scrape-progress-title');
+  const spinner = document.getElementById('scrape-progress-spinner');
+  const stopBtn = document.getElementById('scrape-stop-btn');
+
+  if (p.running) {
+    spinner.style.display = 'inline-block';
+    stopBtn.style.display = '';
+  } else {
+    spinner.style.display = 'none';
+    stopBtn.style.display = 'none';
+    if (titleEl) titleEl.textContent = '스크랩 완료';
+  }
+
+  // 진행 바
+  const total = p.total || 0;
+  const done = p.done || 0;
+  const pct = total > 0 ? Math.round((done / total) * 100) : (p.running ? 0 : 100);
+  const bar = document.getElementById('scrape-progress-bar');
+  const txt = document.getElementById('scrape-progress-text');
+  if (bar) bar.style.width = pct + '%';
+  if (txt) txt.textContent = total > 0 ? `${done} / ${total} 완료` : (p.running ? '준비 중...' : '완료');
+
+  // 로그 (신규 항목만 append)
+  const logEl = document.getElementById('scrape-progress-log');
+  if (logEl && p.log && p.log.length > lastScrapeProgressLogLen) {
+    const newEntries = p.log.slice(lastScrapeProgressLogLen);
+    lastScrapeProgressLogLen = p.log.length;
+    newEntries.forEach(e => {
+      const line = document.createElement('div');
+      line.style.color = e.type === 'error' ? '#ef5350' : e.type === 'done' ? '#66bb6a' : 'var(--text2)';
+      line.textContent = e.msg;
+      logEl.appendChild(line);
+    });
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+}
+
+async function stopScraping() {
+  try {
+    const btn = document.getElementById('scrape-stop-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '정지 중...'; }
+    await api('POST', '/api/benchmarking/stop');
+    toast('정지 요청됨. 현재 작업 완료 후 중단됩니다.', 'info');
+  } catch (e) {
+    toast('정지 실패: ' + e.message, 'error');
+  } finally {
+    const btn = document.getElementById('scrape-stop-btn');
+    if (btn) { btn.disabled = false; btn.textContent = '■ 정지'; }
+  }
+}
 
 async function loadScrapes() {
   const projectSel = document.getElementById('scrapes-filter-project');
@@ -2684,6 +2828,13 @@ async function loadScrapes() {
     // 계정별 수동 스크랩 패널 렌더링
     renderScrapeTargetsPanel(bmOverview.projects || []);
 
+    // 스크랩 진행 중이면 즉시 UI 표시 + 폴링 시작
+    const bmProgress = await api('GET', '/api/benchmarking/progress').catch(() => null);
+    if (bmProgress && bmProgress.running) {
+      updateScrapeProgressUI(bmProgress);
+      startScrapeProgressPolling();
+    }
+
     renderScrapes(scrapes);
 
     // 배지 업데이트
@@ -2703,17 +2854,19 @@ function renderScrapeTargetsPanel(projects) {
   const list = document.getElementById('scrape-targets-list');
   if (!panel || !list) return;
 
-  // 활성화된 벤치마킹 프로젝트의 타겟 목록 수집
+  // 타겟이 1개 이상 있는 프로젝트만 수집 (포스팅 계정 기준)
   const items = [];
   for (const proj of projects) {
-    // is_enabled 무관 — 타겟이 있으면 수동 스크랩 버튼 표시
     const targets = JSON.parse(proj.targets || '[]');
-    for (const t of targets) {
-      if (t.enabled === false || !t.url.trim()) continue;  // undefined → 활성(구형 데이터 호환)
-      const m = t.url.match(/@([a-zA-Z0-9_.]+)/);
-      const username = m ? m[1] : t.url;
-      items.push({ projectId: proj.project_id, projectName: proj.project_name || '', targetUrl: t.url, username, isAutoEnabled: !!proj.is_enabled });
-    }
+    const activeTargets = targets.filter(t => t.enabled !== false && t.url && t.url.trim());
+    if (activeTargets.length === 0) continue;
+    items.push({
+      projectId: proj.project_id,
+      projectName: proj.project_name || '',
+      postingAccount: proj.posting_account || '',
+      isAutoEnabled: !!proj.is_enabled,
+      targetCount: activeTargets.length,
+    });
   }
 
   if (items.length === 0) {
@@ -2724,26 +2877,35 @@ function renderScrapeTargetsPanel(projects) {
   panel.style.display = '';
   list.innerHTML = items.map(item => `
     <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px">
-      <span style="font-size:12px;color:var(--text);font-weight:500">@${escHtml(item.username)}</span>
+      <span style="font-size:12px;color:var(--text);font-weight:500">@${escHtml(item.postingAccount)}</span>
       <span style="font-size:11px;color:var(--text2)">${escHtml(item.projectName)}</span>
+      <span style="font-size:11px;color:var(--text2)">(${item.targetCount}개 계정)</span>
       ${!item.isAutoEnabled ? '<span style="font-size:10px;color:var(--yellow);border:1px solid var(--yellow);border-radius:4px;padding:1px 5px">수동</span>' : ''}
-      <button class="btn btn-xs btn-primary" id="scrape-btn-${escHtml(item.projectId + '-' + item.username)}"
-        onclick="triggerTargetScrape(${item.projectId}, '${escHtml(item.targetUrl)}', '${escHtml(item.username)}')"
+      <button class="btn btn-xs btn-primary" id="scrape-btn-${item.projectId}"
+        onclick="triggerProjectScrape(${item.projectId}, '${escHtml(item.postingAccount)}', ${item.targetCount})"
         style="margin-left:4px">
         ▶ 스크랩
       </button>
     </div>`).join('');
 }
 
-// 특정 대상 계정 수동 스크랩 실행
-async function triggerTargetScrape(projectId, targetUrl, username) {
-  const btnId = `scrape-btn-${projectId}-${username}`;
-  const btn = document.getElementById(btnId);
+// 프로젝트 전체 타겟 수동 스크랩 실행
+async function triggerProjectScrape(projectId, postingAccount, targetCount) {
+  const btn = document.getElementById(`scrape-btn-${projectId}`);
   try {
     if (btn) { btn.disabled = true; btn.textContent = '실행 중...'; }
-    const result = await api('POST', '/api/benchmarking/run-target', { projectId, targetUrl });
+    const result = await api('POST', `/api/benchmarking/run/${projectId}`);
     if (result.success) {
-      toast(`@${username} 스크랩 시작됨. 진행 상황은 벤치마킹 탭에서 확인하세요.`, 'success');
+      toast(`@${postingAccount} 스크랩 시작됨 (${targetCount}개 계정)`, 'success');
+      // 진행 패널 초기화 후 폴링 시작
+      lastScrapeProgressLogLen = 0;
+      const panel = document.getElementById('scrape-progress-panel');
+      const logEl = document.getElementById('scrape-progress-log');
+      if (logEl) logEl.innerHTML = '';
+      if (panel) panel.style.display = '';
+      const titleEl = document.getElementById('scrape-progress-title');
+      if (titleEl) titleEl.textContent = `@${postingAccount} 스크랩 진행 중...`;
+      startScrapeProgressPolling();
     } else {
       toast(result.message || '이미 실행 중입니다.', 'info');
     }
@@ -2776,7 +2938,7 @@ function renderScrapes(scrapes) {
     const mediaCell = displayPaths.length > 0
       ? `<div style="display:flex;gap:4px;flex-wrap:wrap">${displayPaths.slice(0,3).map(p => {
           const isVideo = /\.(mp4|mov|webm)$/i.test(p);
-          const src = p.startsWith('/') ? p : '/' + p;
+          const src = mediaUrl(p);
           return isVideo
             ? `<div style="width:40px;height:40px;background:var(--surface2);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:16px">▶</div>`
             : `<img src="${escHtml(src)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;cursor:pointer" onclick="window.open('${escHtml(src)}','_blank')" onerror="this.style.display='none'">`;

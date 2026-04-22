@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>설치하기 — Threads AutoPoster</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0f0f0f; color: #e8e8e8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.7; padding: 60px 20px; }
+    .wrap { max-width: 640px; margin: 0 auto; text-align: center; }
+    h1 { font-size: 28px; color: #9d5cf5; margin-bottom: 12px; }
+    .lead { color: #bbb; font-size: 16px; margin-bottom: 36px; }
+    .btn-big {
+      display: inline-block; background: #7c3aed; color: white; padding: 18px 36px;
+      border-radius: 12px; text-decoration: none; font-weight: 700; font-size: 17px;
+      margin: 8px;
+      box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
+      transition: all .2s;
+    }
+    .btn-big:hover { background: #9d5cf5; transform: translateY(-2px); box-shadow: 0 6px 24px rgba(124, 58, 237, 0.6); }
+    .btn-meta { display: block; font-size: 12px; font-weight: 400; opacity: 0.85; margin-top: 4px; }
+    .steps {
+      text-align: left; background: #1a1a1a; border: 1px solid #333; border-radius: 12px;
+      padding: 24px 28px; margin: 36px 0;
+    }
+    .steps h2 { font-size: 15px; color: #9d5cf5; margin-bottom: 12px; }
+    .steps ol { margin-left: 20px; }
+    .steps li { margin-bottom: 10px; color: #ccc; font-size: 14px; }
+    .steps li b { color: #fff; }
+    .note {
+      background: #1e2f1e; border: 1px solid #2d5a2d; border-radius: 8px;
+      padding: 14px 18px; margin: 16px 0; color: #a8d8a8; font-size: 13px;
+      text-align: left;
+    }
+    .alt {
+      margin-top: 32px; font-size: 12px; color: #777;
+    }
+    .alt a { color: #9d5cf5; }
+    a { color: #9d5cf5; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧵 Threads AutoPoster</h1>
+  <p class="lead">Windows 64bit 설치 프로그램<br>다운로드하고 더블클릭만 하면 끝.</p>
+
+  <a class="btn-big" href="https://github.com/Eileen42/Threads-autoposter/releases/download/v1.0.0/ThreadsAutoPoster-Setup-1.0.0.exe">
+    ⬇️ ThreadsAutoPoster-Setup-1.0.0.exe 받기
+    <span class="btn-meta">88MB · Windows 10/11 64bit</span>
+  </a>
+
+  <div class="steps">
+    <h2>설치 흐름</h2>
+    <ol>
+      <li>위 버튼 클릭 → <b>다운로드 받은 .exe 파일 더블클릭</b></li>
+      <li>설치 마법사 → "다음" 누르며 진행 → 자동 설치</li>
+      <li>설치 완료 후 자동 실행 → 시스템 트레이(우측 하단)에 보라색 아이콘 등장</li>
+      <li>Windows 시작 시 <b>자동 실행 등록됨</b> (트레이 메뉴에서 끌 수 있음)</li>
+      <li>이 페이지(<a href="/">https://threads-autoposter.vercel.app</a>) 새로고침 → 사용 시작</li>
+    </ol>
+  </div>
+
+  <div class="note">
+    ⚠️ 첫 실행 시 <b>Windows Defender SmartScreen 경고</b>가 뜰 수 있습니다 → "추가 정보" → "실행"<br>
+    ⚠️ 첫 실행 시 <b>Playwright Chromium</b>(약 200MB) 자동 다운로드 — 수 분 소요 (트레이 메뉴 → "상태/로그 창"으로 진행 확인 가능)
+  </div>
+
+  <div class="alt">
+    설치 프로그램 대신 압축본을 원하시면 → <a href="https://github.com/Eileen42/Threads-autoposter/releases/latest">GitHub Releases</a>에서 portable zip 받기
+  </div>
+
+  <p style="margin-top: 40px"><a href="/">← 메인으로 돌아가기</a></p>
+</div>
+</body>
+</html>

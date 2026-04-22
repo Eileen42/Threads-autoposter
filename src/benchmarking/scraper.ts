@@ -32,30 +32,62 @@ export function isOnlyMentions(text: string): boolean {
 // ── Threads 내부 API JSON 파서 ────────────────────────────────────────────────
 type ApiParsed = Pick<ScrapedPost, 'textContent' | 'mediaUrls' | 'commentText' | 'commentLinks'>;
 
-/** JSON 트리에서 thread 객체를 추출하는 모든 경로 시도 */
+/**
+ * JSON 트리에서 thread 객체를 추출.
+ *
+ * 우선순위:
+ *   ① root.containing_thread                          — 원본 스레드 전체 (thread_items[0]=원본, [1]=연결글)
+ *   ② specificKey.containing_thread (중첩된 경우)      — 체인 포스트 URL 방문 시에도 원본 포스트 확보
+ *   ③ specificKey 직접                                 — containing_thread 없을 때 폴백
+ *   ④ edges/node 폴백
+ *
+ * ⚠ containing_thread를 우선해야 원문 본문/첫 댓글 역전 방지됨.
+ *   체인 포스트 URL 방문 시 containing_thread 없이 barcelona_thread_by_post_id만 오면
+ *   thread_items[0]이 연결글(쿠팡 파트너스 공시문 등)이 되어 원문 본문이 역전됨.
+ */
 function extractThreadNode(json: any): { thread: any; replyThreads: any[] } | null {
   try {
-    // 응답 wrapper 벗기기: 중첩된 data 필드 여러 번 시도
-    const candidates: any[] = [
-      json,
-      json?.data,
-      json?.data?.data,
-    ];
+    const candidates: any[] = [json, json?.data, json?.data?.data];
+
+    const specificKeys = [
+      'barcelona_thread_by_post_id',
+      'thread_by_post_id',
+      'xdt_api__v1__text_feed__thread_post_id_to_media_v2',
+      'xdt_api__v1__text_feed__post_to_user',
+    ] as const;
 
     for (const root of candidates) {
       if (!root) continue;
 
-      // Threads 웹 GraphQL 주요 응답 키 전체 목록
-      const thread =
-        root.containing_thread ??
-        root.barcelona_thread_by_post_id ??
-        root.thread_by_post_id ??
-        root.xdt_api__v1__text_feed__thread_post_id_to_media_v2 ??
-        root.xdt_api__v1__text_feed__post_to_user ??
-        root.edges?.[0]?.node ??
-        root.node ??
-        null;
+      // ① root.containing_thread — 최우선
+      if (root.containing_thread) {
+        const thread = root.containing_thread;
+        const replyThreads: any[] = root.reply_threads ?? thread.reply_threads ?? [];
+        return { thread, replyThreads };
+      }
 
+      // ② 특정 포스트 키 내부에 containing_thread가 있으면 그것을 우선 사용
+      //    (체인 포스트 URL 방문 시 API가 specificKey 안에 containing_thread를 포함하는 경우)
+      for (const key of specificKeys) {
+        const node = root[key];
+        if (!node) continue;
+        if (node.containing_thread) {
+          const thread = node.containing_thread;
+          const replyThreads: any[] = node.reply_threads ?? root.reply_threads ?? thread.reply_threads ?? [];
+          return { thread, replyThreads };
+        }
+      }
+
+      // ③ containing_thread 없음 — specificKey 직접 사용 (thread_items[0]이 연결글일 수 있음)
+      for (const key of specificKeys) {
+        const node = root[key];
+        if (!node) continue;
+        const replyThreads: any[] = node.reply_threads ?? root.reply_threads ?? [];
+        return { thread: node, replyThreads };
+      }
+
+      // ④ edges/node 폴백
+      const thread = root.edges?.[0]?.node ?? root.node ?? null;
       if (thread) {
         const replyThreads: any[] =
           root.reply_threads ??

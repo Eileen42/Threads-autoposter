@@ -3,6 +3,8 @@ node_modules/
 
 # ─── Build output ────────────────────────────────────────
 dist/
+dist-electron/
+electron/tray-icon.png
 
 # ─── Runtime data (DB, browser profiles, media) ──────────
 data/autoposter.db
@@ -33,3 +35,5 @@ Thumbs.db
 .env.local
 *.pem
 google-credentials.json
+
+.vercel

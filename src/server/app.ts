@@ -13,6 +13,51 @@ import { scheduleRuleQueries, postQueries } from '../storage/db';
 const app = express();
 const PORT = 4000;
 
+// ─── CORS + Private Network Access ──────────────────────────────────────────
+// 웹 호스팅 프론트(HTTPS) → 사용자 PC localhost 백엔드 호출 허용.
+// 환경변수 ALLOWED_ORIGINS (콤마 구분) 로 추가 도메인 지정 가능.
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:4000',
+  'http://127.0.0.1:4000',
+];
+const extraOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
+const allowedOrigins = new Set([...DEFAULT_ALLOWED_ORIGINS, ...extraOrigins]);
+// *.vercel.app 과 배포 도메인 패턴도 허용 (와일드카드)
+const allowedOriginPatterns = [
+  /^https:\/\/[a-z0-9-]+\.vercel\.app$/i,
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  let allow = false;
+  if (origin) {
+    if (allowedOrigins.has(origin)) allow = true;
+    else if (allowedOriginPatterns.some(p => p.test(origin))) allow = true;
+  }
+  if (allow && origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  // Chrome Private Network Access (HTTPS → http://localhost 허용)
+  if (req.headers['access-control-request-private-network']) {
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  }
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
+  next();
+});
+
+// ─── Health check (프론트 연결 상태 판정용) ──────────────────────────────────
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, version: 1, ts: Date.now() });
+});
+
 app.use(express.json());
 app.use(express.static(path.join(process.cwd(), 'public')));
 app.use('/media', express.static(path.join(process.cwd(), 'data', 'media')));

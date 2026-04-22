@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Threads AutoPoster</title>
+  <!-- Google AdSense (publisher ID는 배포 시 교체) -->
+  <meta name="google-adsense-account" content="ca-pub-XXXXXXXXXXXXXXXX">
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -25,7 +28,64 @@
     /* Layout */
     .layout { display: flex; height: 100vh; }
     .sidebar { width: 220px; min-width: 220px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
-    .main { flex: 1; overflow-y: auto; }
+    /* main을 grid로: 콘텐츠 + 우측 sticky 광고 레일 (같은 스크롤 컨테이너 안에 공존) */
+    .main {
+      flex: 1; overflow-y: auto; min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      align-items: start;
+    }
+    .content-wrap { min-width: 0; }
+
+    /* 광고 레일 — 콘텐츠와 같은 스크롤 안에 있지만 우측에 sticky. 배경/테두리 없이 자연스러운 여백처럼 보이게 */
+    .ad-rail {
+      position: sticky; top: 24px;
+      align-self: start;
+      padding: 24px 24px 24px 8px;
+      display: flex; flex-direction: column; gap: 20px;
+      max-height: calc(100vh - 24px);
+      overflow: hidden;
+    }
+    .ad-slot {
+      background: transparent; border: 1px dashed rgba(255,255,255,.07); border-radius: 10px;
+      min-height: 280px; display: flex; align-items: center; justify-content: center;
+      color: var(--text2); font-size: 11px;
+    }
+    .ad-slot ins.adsbygoogle { display: block; width: 100%; }
+
+    /* 화면 폭에 따라 광고 레일 축소/숨김 (주요 기능 보장) */
+    @media (max-width: 1400px) {
+      .main { grid-template-columns: minmax(0, 1fr) 280px; }
+      .ad-rail { padding: 24px 16px 24px 0; }
+    }
+    @media (max-width: 1200px) {
+      .main { grid-template-columns: minmax(0, 1fr); }
+      .ad-rail { display: none; }
+    }
+    /* 모바일: 좌측 사이드바 축소 + 광고는 하단 */
+    @media (max-width: 900px) {
+      .sidebar { width: 64px; min-width: 64px; }
+      .sidebar-header h1, .sidebar-header p, .nav-section { display: none; }
+      .nav-item { justify-content: center; padding: 10px 6px; font-size: 0; }
+      .nav-item svg { margin: 0; }
+      .nav-item span { display: none !important; }
+      .ad-sidebar-mobile {
+        display: flex; flex-direction: column; gap: 12px;
+        padding: 16px 12px; border-top: 1px solid var(--border);
+        background: var(--surface);
+      }
+    }
+    @media (min-width: 901px) { .ad-sidebar-mobile { display: none !important; } }
+
+    /* 상단 배너들 */
+    .top-banner {
+      padding: 10px 16px; font-size: 13px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .top-banner.warn { background: #3a2500; border-bottom: 1px solid #a16207; color: #fde68a; }
+    .top-banner.info { background: #1e3a5f; border-bottom: 1px solid #3b82f6; color: #bfdbfe; }
+    .top-banner a { color: inherit; text-decoration: underline; font-weight: 600; }
+    .top-banner .banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
     /* Sidebar */
     .sidebar-header { padding: 20px 16px 12px; border-bottom: 1px solid var(--border); }
@@ -172,6 +232,22 @@
   </style>
 </head>
 <body>
+<!-- 백엔드 연결 실패 배너 (app.js가 표시/숨김 제어) -->
+<div id="backend-status-banner" class="top-banner warn" style="display:none">
+  <div>
+    ⚠️ <b>로컬 백엔드에 연결할 수 없습니다.</b> Threads AutoPoster를 사용하려면 PC에 백엔드 프로그램을 설치하고 실행해야 합니다.
+  </div>
+  <div class="banner-actions">
+    <a href="/download" id="backend-download-link" class="btn btn-primary btn-sm" style="text-decoration:none">백엔드 설치</a>
+    <button class="btn btn-secondary btn-sm" onclick="checkBackendConnection()">재시도</button>
+  </div>
+</div>
+
+<!-- 모바일 "PC 전용" 안내 배너 (app.js가 표시 제어) -->
+<div id="mobile-pc-only-banner" class="top-banner info" style="display:none">
+  <div>📱 이 서비스는 <b>PC 전용</b>입니다. 모바일에서는 기능이 동작하지 않습니다. PC에서 접속해주세요.</div>
+</div>
+
 <div class="layout">
   <!-- Sidebar -->
   <aside class="sidebar">
@@ -238,6 +314,7 @@
 
   <!-- Main Content -->
   <main class="main">
+    <div class="content-wrap">
     <!-- Dashboard -->
     <div id="page-dashboard" class="page active">
       <div class="page-header">
@@ -482,6 +559,27 @@
         <div id="scrape-targets-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
 
+      <!-- 스크랩 진행 상황 -->
+      <div id="scrape-progress-panel" class="card" style="margin-bottom:12px;padding:14px 16px;display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);display:flex;align-items:center;gap:6px">
+            <span id="scrape-progress-spinner" style="display:inline-block;width:10px;height:10px;border:2px solid var(--purple);border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite"></span>
+            <span id="scrape-progress-title">스크랩 진행 중...</span>
+          </div>
+          <button id="scrape-stop-btn" class="btn btn-xs" onclick="stopScraping()"
+            style="background:#e53935;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer">
+            ■ 정지
+          </button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div style="flex:1;background:var(--surface2);border-radius:99px;height:8px;overflow:hidden;border:1px solid var(--border)">
+            <div id="scrape-progress-bar" style="height:100%;background:var(--purple);border-radius:99px;width:0%;transition:width 0.4s ease"></div>
+          </div>
+          <span id="scrape-progress-text" style="font-size:11px;color:var(--text2);white-space:nowrap">0 / 0</span>
+        </div>
+        <div id="scrape-progress-log" style="font-size:11px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;max-height:100px;overflow-y:auto;line-height:1.6;font-family:monospace"></div>
+      </div>
+
       <!-- 스프레드시트 테이블 -->
       <div class="card" style="padding:0;overflow:hidden">
         <div id="scrapes-table-wrap" style="overflow-x:auto">
@@ -507,7 +605,40 @@
       </div>
     </div>
 
+    </div><!-- /.content-wrap -->
+
+    <!-- 광고 레일 — main 스크롤 안 오른쪽에 sticky로 고정, 콘텐츠와 같이 정렬된 것처럼 배치 -->
+    <aside class="ad-rail" id="ad-rail">
+      <div class="ad-slot">
+        <ins class="adsbygoogle"
+          style="display:block"
+          data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+          data-ad-slot="1111111111"
+          data-ad-format="auto"
+          data-full-width-responsive="true"></ins>
+      </div>
+      <div class="ad-slot">
+        <ins class="adsbygoogle"
+          style="display:block"
+          data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+          data-ad-slot="2222222222"
+          data-ad-format="auto"
+          data-full-width-responsive="true"></ins>
+      </div>
+    </aside>
   </main>
+</div>
+
+<!-- 모바일 전용 하단 광고 영역 -->
+<div class="ad-sidebar-mobile" id="ad-sidebar-mobile">
+  <div class="ad-slot">
+    <ins class="adsbygoogle"
+      style="display:block"
+      data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+      data-ad-slot="3333333333"
+      data-ad-format="auto"
+      data-full-width-responsive="true"></ins>
+  </div>
 </div>
 
 <!-- Google Sheets 연동 모달 -->
@@ -998,5 +1129,18 @@
 <div id="toast"></div>
 
 <script src="/js/app.js"></script>
+<script>
+  // AdSense 슬롯 초기화 (publisher ID 실제 값으로 교체된 후에만 동작)
+  (function initAds() {
+    try {
+      const pubMeta = document.querySelector('meta[name="google-adsense-account"]');
+      const pub = pubMeta?.content || '';
+      if (!pub || pub.includes('XXXX')) return; // placeholder 상태면 skip
+      document.querySelectorAll('ins.adsbygoogle').forEach(() => {
+        (window.adsbygoogle = window.adsbygoogle || []).push({});
+      });
+    } catch (_) {}
+  })();
+</script>
 </body>
 </html>

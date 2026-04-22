@@ -1,0 +1,26 @@
+# 정적 사이트(public/)만 배포
+node_modules
+dist
+dist-electron
+win-unpacked
+data
+electron
+src
+__tests__
+.claude
+.git
+qa-screenshots
+logs
+temp_media
+*.zip
+*.exe
+ThreadsAutoPoster*
+
+# 설정/로컬 파일
+*.log
+*.bat
+*.md
+ecosystem.config.js
+tsconfig.json
+package-lock.json
+package.json

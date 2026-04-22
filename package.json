@@ -2,12 +2,17 @@
   "name": "threads-autoposter",
   "version": "1.0.0",
   "description": "Threads 자동 포스팅 - 사람처럼 동작하는 스케줄 기반 AI 콘텐츠 발행 도구",
-  "main": "dist/index.js",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "tsx watch --no-warnings=ExperimentalWarning src/index.ts",
     "build": "tsc",
     "start": "node --no-warnings=ExperimentalWarning dist/index.js",
     "setup:browsers": "playwright install chromium",
+    "icon:gen": "node electron/gen-icon.js",
+    "electron:dev": "npm run build && npm run icon:gen && electron .",
+    "electron:build": "npm run build && npm run icon:gen && electron-builder --win",
+    "deploy:web": "bash scripts/deploy-vercel.sh prod",
+    "deploy:preview": "bash scripts/deploy-vercel.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
@@ -24,8 +29,42 @@
     "@types/node": "^22.0.0",
     "@types/node-cron": "^3.0.11",
     "@vitest/coverage-v8": "^4.0.18",
+    "electron": "^35.7.5",
+    "electron-builder": "^24.13.3",
     "tsx": "^4.7.2",
     "typescript": "^5.4.3",
     "vitest": "^4.0.18"
+  },
+  "build": {
+    "appId": "com.threadsautoposter.app",
+    "productName": "ThreadsAutoPoster",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "public/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "electron/tray-icon.png",
+        "to": "tray-icon.png"
+      }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "zip", "arch": ["x64"] }
+      ],
+      "icon": "electron/tray-icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Threads AutoPoster"
+    }
   }
 }
